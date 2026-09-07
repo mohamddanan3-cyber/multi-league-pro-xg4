@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MULTI-LEAGUE PRO xG PREDICTOR V7</title>
+<style>
+:root{--bg:#08101d;--p:#101a2c;--l:#293750;--t:#eef4ff;--m:#93a3bf;--a:#62e0a2;--b:#76a9ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#14223a,#08101d 60%);color:var(--t);font:15px system-ui,Segoe UI,Arial}.wrap{max-width:1180px;margin:auto;padding:18px}h1{font-size:clamp(25px,4vw,40px);margin:5px 0}h2{font-size:18px}.sub,.small{color:var(--m)}.panel{background:rgba(16,26,44,.94);border:1px solid var(--l);border-radius:18px;padding:17px;margin:14px 0;box-shadow:0 12px 35px #0004}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.two{grid-template-columns:repeat(2,1fr)}label{display:block;color:var(--m);font-size:12px;font-weight:700;margin-bottom:6px}select,input,button{width:100%;padding:11px;border-radius:10px;border:1px solid #34425f;background:#0b1424;color:var(--t);font:inherit}button{cursor:pointer;font-weight:800;background:linear-gradient(135deg,#173d35,#193a60)}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.status{padding:10px;border:1px solid var(--l);border-radius:10px;color:var(--m);margin-top:12px}.hero{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;text-align:center;align-items:center}.team{padding:18px;background:#0b1424;border:1px solid var(--l);border-radius:14px}.team b{font-size:20px;display:block;margin-top:4px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:12px}.metric{padding:13px;border-radius:12px;background:#0b1424;border:1px solid var(--l)}.metric span{display:block;color:var(--m);font-size:11px}.metric b{font-size:21px}.bar{height:8px;background:#26334e;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--a)}.row{margin:10px 0}.rowhead{display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px}.scores{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.score{padding:12px;text-align:center;background:#0b1424;border:1px solid var(--l);border-radius:12px}.score b{font-size:23px;display:block}.good{color:var(--a)}table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px solid var(--l);text-align:left}th{color:var(--m);font-size:11px}@media(max-width:760px){.grid,.two,.metrics{grid-template-columns:1fr 1fr}.scores{grid-template-columns:repeat(2,1fr)}.hero{grid-template-columns:1fr}.vs{display:none}}@media(max-width:480px){.grid,.two,.metrics,.actions{grid-template-columns:1fr}}
+</style></head>
+<body><div class="wrap">
+<div class="panel"><h1>⚽ MULTI-LEAGUE PRO xG PREDICTOR V7</h1><div class="sub">Real backend edition — FastAPI + statistical model + live public match data.</div></div>
+<div class="panel"><h2>Match</h2><div class="grid">
+<div><label>LEAGUE</label><select id="league"></select></div>
+<div><label>HOME</label><select id="home"></select></div>
+<div><label>AWAY</label><select id="away"></select></div>
+<div><label>WARMUP</label><input id="warmup" type="number" value="120" min="30" max="1000"></div>
+</div>
+<div class="actions"><button onclick="loadLeague(false)">📥 Load Data</button><button onclick="loadLeague(true)">🔄 Refresh Data</button></div>
+<div id="status" class="status">Loading leagues…</div></div>
+
+<div class="panel"><h2>Optional odds</h2><div class="grid">
+<div><label>HOME ODDS</label><input id="oh" type="number" step=".01"></div>
+<div><label>DRAW ODDS</label><input id="od" type="number" step=".01"></div>
+<div><label>AWAY ODDS</label><input id="oa" type="number" step=".01"></div>
+<div><label>&nbsp;</label><button onclick="predict()">🔮 ANALYZE</button></div>
+</div></div>
+
+<div id="out"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct=x=>(100*x).toFixed(1)+"%";
+async function api(url,opt){let r=await fetch(url,opt);let j=await r.json();if(!r.ok)throw Error(j.detail||"Request failed");return j}
+async function boot(){try{let x=await api("/api/leagues");$("league").innerHTML=Object.entries(x).map(([k,v])=>`<option value="${k}">${k} — ${esc(v)}</option>`).join("");await loadLeague(false)}catch(e){$("status").textContent=e.message}}
+$("league").onchange=()=>loadLeague(false);
+async function loadLeague(refresh){try{$("status").textContent="Loading data…";let x=await api(`/api/league/${$("league").value}?refresh=${refresh}`);$("home").innerHTML=x.teams.map(t=>`<option>${esc(t)}</option>`).join("");$("away").innerHTML=x.teams.map(t=>`<option>${esc(t)}</option>`).join("");if(x.teams.length>1)$("away").selectedIndex=1;$("status").textContent=`${x.matches} matches loaded.`}catch(e){$("status").textContent=e.message}}
+function bars(o){return Object.entries(o).map(([k,v])=>`<div class="row"><div class="rowhead"><span>${k.toUpperCase()}</span><b>${pct(v)}</b></div><div class="bar"><div class="fill" style="width:${v*100}%"></div></div></div>`).join("")}
+async function predict(){try{$("status").textContent="Running model…";let body={league:$("league").value,home:$("home").value,away:$("away").value,warmup:+$("warmup").value,odd_home:+$("oh").value||null,odd_draw:+$("od").value||null,odd_away:+$("oa").value||null};let r=await api("/api/predict",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});render(r);$("status").textContent="Analysis complete."}catch(e){$("status").textContent=e.message}}
+function render(r){let scores=r.scores.map(x=>`<div class="score"><b>${x.h}-${x.a}</b><span class="small">${pct(x.p)}</span></div>`).join("");let best=Object.entries(r.p1x2).sort((a,b)=>b[1]-a[1])[0];$("out").innerHTML=`
+<div class="panel"><div class="hero"><div class="team">HOME<b>${esc(r.home)}</b></div><div class="vs">VS</div><div class="team">AWAY<b>${esc(r.away)}</b></div></div>
+<div class="metrics"><div class="metric"><span>xG HOME</span><b>${r.xg_home}</b></div><div class="metric"><span>xG AWAY</span><b>${r.xg_away}</b></div><div class="metric"><span>TOTAL xG</span><b>${r.xg_total}</b></div><div class="metric"><span>CONFIDENCE</span><b>${r.confidence}%</b></div></div></div>
+<div class="grid two"><div class="panel"><h2>1X2</h2>${bars(r.p1x2)}</div><div class="panel"><h2>BTTS</h2>${bars(r.btts)}<h2>Double Chance</h2>${bars(r.double_chance)}</div></div>
+<div class="panel"><h2>Top Exact Scores</h2><div class="scores">${scores}</div></div>
+<div class="grid two"><div class="panel"><h2>Goals</h2>${Object.entries(r.ou).map(([l,v])=>`<div class="row"><b>Over ${l}: ${pct(v.over)}</b><div class="small">Under: ${pct(v.under)}</div></div>`).join("")}</div>
+<div class="panel"><h2>Half Time</h2>${bars({home:r.ht.home,draw:r.ht.draw,away:r.ht.away)}<div class="small">Top HT: ${r.ht.scores.map(x=>x.h+"-"+x.a+" ("+pct(x.p)+")").join(" · ")}</div></div></div>
+<div class="panel"><h2>Model Verdict</h2><div class="metric"><span>MAIN LEAN</span><b>${best[0].toUpperCase()}</b><div class="small">${pct(best[1])}</div></div></div>
+<div class="panel"><h2>Stats</h2><table><tr><th></th><th>HOME</th><th>AWAY</th></tr><tr><td>Corners</td><td>${r.stats.home_corners.toFixed(2)}</td><td>${r.stats.away_corners.toFixed(2)}</td></tr><tr><td>Yellows</td><td>${r.stats.home_yellows.toFixed(2)}</td><td>${r.stats.away_yellows.toFixed(2)}</td></tr><tr><td>Reds</td><td>${r.stats.home_reds.toFixed(3)}</td><td>${r.stats.away_reds.toFixed(3)}</td></tr></table></div>
+<div class="panel"><h2>Value Check</h2>${r.value.length?r.value.map(v=>`<div class="metric" style="margin:7px 0"><span>${v.market}</span><b class="${v.edge>=0?"good":""}">${v.edge>=0?"+":""}${(100*v.edge).toFixed(1)}%</b><div class="small">Odds ${v.odds.toFixed(2)} · Fair ${v.fair_odds.toFixed(2)} · Model ${pct(v.model_probability)}</div></div>`).join(""):"<span class='small'>No odds entered.</span>"}</div>
+<div class="panel"><h2>Backtest</h2><div class="metrics"><div class="metric"><span>MATCHES</span><b>${r.backtest.matches}</b></div><div class="metric"><span>ACCURACY</span><b>${r.backtest.matches?pct(r.backtest.accuracy):"—"}</b></div><div class="metric"><span>BRIER</span><b>${r.backtest.matches?r.backtest.brier.toFixed(3):"—"}</b></div><div class="metric"><span>DATA</span><b>${r.data_matches}</b></div></div></div>`}
+boot();
+</script></body></html>
